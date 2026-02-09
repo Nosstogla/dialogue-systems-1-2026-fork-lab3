@@ -47,7 +47,7 @@ This should give an output, something like: 11.8.0
    ```
    Clone your fork to your machine:
    ```sh
-   git clone https://github.com/GU-CLASP/dialogue-systems-1-2026.git
+   git clone <your_forks'_https.git>
    ```
 4. Go to the `<name_of_your_fork>/labs/lab3fixed/Code/` folder.
    ```sh
