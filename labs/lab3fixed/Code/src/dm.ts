@@ -175,6 +175,14 @@ const dmMachine = setup
                   {
                     target: "#Appointment",
                     guard: ({ context }) => !!context.lastResult,
+                        actions: assign({
+                        person: undefined,
+                        day: undefined,
+                        time: undefined,
+                        allDay: undefined,
+                        confirm: undefined,
+                        //lastResult: null,
+                      }),
                   },
                   { 
                     target: ".NoInput" 
