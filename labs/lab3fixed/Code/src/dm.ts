@@ -96,6 +96,15 @@ function getYesNo(utterance: string): boolean | undefined
   return (grammar[utterance.toLowerCase()] || {}).confirm;
 }
 
+// const resetContext = assign({
+//   person: undefined,
+//   day: undefined,
+//   time: undefined,
+//   allDay: undefined,
+//   confirm: undefined,
+//   lastResult: null,
+// })
+
 const dmMachine = setup
 (
   {
@@ -249,7 +258,7 @@ const dmMachine = setup
                       guard: ({ context }) => !!context.person,
                     },
                     { 
-                      target: "#Appointment.CheckGrammar1",
+                      target: ".Errorhandling",
                       guard: ({ context }) => !!context.lastResult && !context.person,
                     },
                     { 
@@ -274,6 +283,22 @@ const dmMachine = setup
                     on: 
                       { SPEAK_COMPLETE: "Ask" },
                   },
+              Errorhandling: 
+              {
+                entry: 
+                  {
+                    assign: ({lastResult: null}), 
+                    type: "spst.speak",
+                    params: ({ context }) => 
+                      ({
+                        utterance: `You just said: ${context.lastResult![0].utterance}. And it 
+                        is not an option.`,
+                      }),
+                  },
+
+                on: 
+                  { SPEAK_COMPLETE: "Prompt" },
+              },
 
                 Ask: 
                 {
@@ -306,11 +331,14 @@ const dmMachine = setup
                   [
                     {
                       target: "WholeDay",
-                      //target: "#Appointment",
                       guard: ({ context }) => !!context.day,
                     },
                     { 
-                      target: ".NoInput" 
+                      target: ".Errorhandling",
+                      guard: ({ context }) => !!context.lastResult && !context.day,
+                    },
+                    { 
+                      target: ".NoInput",
                     },
                   ],
                 },
@@ -331,7 +359,22 @@ const dmMachine = setup
                     on: 
                       { SPEAK_COMPLETE: "Ask" },
                   },
+              Errorhandling: 
+              {
+                entry: 
+                  {
+                    assign: ({lastResult: null}), 
+                    type: "spst.speak",
+                    params: ({ context }) => 
+                      ({
+                        utterance: `You just said: ${context.lastResult![0].utterance}. And it 
+                        is not an option.`,
+                      }),
+                  },
 
+                on: 
+                  { SPEAK_COMPLETE: "Prompt" },
+              },
                 Ask: 
                 {
                   entry: 
@@ -370,7 +413,11 @@ const dmMachine = setup
                       target: "Time",
                     },
                     { 
-                      target: ".NoInput" 
+                      target: ".Errorhandling",
+                      guard: ({ context }) => !!context.lastResult && !context.allDay,
+                    },
+                    { 
+                      target: ".NoInput",
                     },
                   ],
                 },
@@ -391,7 +438,22 @@ const dmMachine = setup
                     on: 
                       { SPEAK_COMPLETE: "Ask" },
                   },
+              Errorhandling: 
+              {
+                entry: 
+                  {
+                    assign: ({lastResult: null}), 
+                    type: "spst.speak",
+                    params: ({ context }) => 
+                      ({
+                        utterance: `You just said: ${context.lastResult![0].utterance}. And it 
+                        is not an option.`,
+                      }),
+                  },
 
+                on: 
+                  { SPEAK_COMPLETE: "Prompt" },
+              },
                 Ask: 
                 {
                   entry: 
@@ -422,11 +484,15 @@ const dmMachine = setup
                   LISTEN_COMPLETE: 
                   [
                     {
-                      target: "Create",
                       guard: ({ context }) => !!context.time,
+                      target: "Create",
                     },
                     { 
-                      target: ".NoInput" 
+                      target: ".Errorhandling",
+                      guard: ({ context }) => !!context.lastResult && !context.time,
+                    },
+                    { 
+                      target: ".NoInput",
                     },
                   ],
                 },
@@ -447,7 +513,22 @@ const dmMachine = setup
                     on: 
                       { SPEAK_COMPLETE: "Ask" },
                   },
+              Errorhandling: 
+              {
+                entry: 
+                  {
+                    assign: ({lastResult: null}), 
+                    type: "spst.speak",
+                    params: ({ context }) => 
+                      ({
+                        utterance: `You just said: ${context.lastResult![0].utterance}. And it 
+                        is not an option.`,
+                      }),
+                  },
 
+                on: 
+                  { SPEAK_COMPLETE: "Prompt" },
+              },
                 Ask: 
                 {
                   entry: 
@@ -483,10 +564,22 @@ const dmMachine = setup
                     },
                     {
                       guard: ({ context }) => context.confirm === false,
+                      actions: assign({
+                        person: undefined,
+                        day: undefined,
+                        time: undefined,
+                        allDay: undefined,
+                        confirm: undefined,
+                        lastResult: null,
+                      }),
                       target: "Who",
                     },
                     { 
-                      target: ".NoInput" 
+                      target: ".Errorhandling",
+                      guard: ({ context }) => !!context.lastResult && !context.confirm,
+                    },
+                    { 
+                      target: ".NoInput",
                     },
                   ],
                 },
@@ -514,7 +607,22 @@ const dmMachine = setup
                     on: 
                       { SPEAK_COMPLETE: "Ask" },
                   },
+              Errorhandling: 
+              {
+                entry: 
+                  {
+                    assign: ({lastResult: null}), 
+                    type: "spst.speak",
+                    params: ({ context }) => 
+                      ({
+                        utterance: `You just said: ${context.lastResult![0].utterance}. And it 
+                        is not an option.`,
+                      }),
+                  },
 
+                on: 
+                  { SPEAK_COMPLETE: "Prompt" },
+              },
                 Ask: 
                 {
                   entry: 
@@ -555,25 +663,29 @@ const dmMachine = setup
                 on: 
                   { CLICK: "#Greeting", },
               },
-            Hist: 
-            {
-            type: "history",
-            },
-            CheckGrammar1: 
-          {
-            entry: 
-              {
-                type: "spst.speak",
-                params: ({ context }) => 
-                  ({
-                    utterance: `You just said: ${context.lastResult![0].utterance}. And it 
-                    ${isInGrammar(context.lastResult![0].utterance) ? "is" : "is not"} in the grammar.`,
-                  }),
-              },
+            // Hist: 
+            // {
+            // type: "history",
+            // history: "deep",
+            // },
+            
+            
+            // CheckGrammar1: 
+            //   {
+            //     entry: 
+            //       {
+            //         assign: ({lastResult: null}), 
+            //         type: "spst.speak",
+            //         params: ({ context }) => 
+            //           ({
+            //             utterance: `You just said: ${context.lastResult![0].utterance}. And it 
+            //             is not an option.`,
+            //           }),
+            //       },
 
-            on: 
-              { SPEAK_COMPLETE: "Hist" },
-          },
+            //     on: 
+            //       { SPEAK_COMPLETE: "Hist" },
+            //   },
                 
           },
         },
@@ -598,48 +710,6 @@ const dmMachine = setup
             on: 
               { CLICK: "Greeting", },
           },
-
-        // BookAppointment: 
-        //   { 
-        //     initial: "Who",
-        //     states:
-        //       {
-        //         Who: 
-        //         {
-        //           entry: { type: "spst.speak", params: { utterance: `Who are you meeting with?` } },
-        //           on: 
-        //             {
-        //               RECOGNISED: 
-        //                 {
-        //                   actions: assign(({ event }) => 
-        //                     ({
-        //                       person: event.value[0].utterance,
-        //                       lastResult: event.value,
-        //                     })),
-        //                   target: "Day",
-        //                 },
-        //                 ASR_NOINPUT: 
-        //                   {
-        //                     actions: assign({ person:undefined }),
-        //                   },
-        //             },
-        //         },
-        //         Day:
-        //         {},
-        //         AllDay:
-        //         {
-        //           // yes or no
-        //         },
-        //         Time:
-        //         {},
-        //         CreateAppointment:
-        //         {
-        //           //no tillbaka till who men yes till confirmation
-        //         },
-        //         Confirmation:
-        //         {},
-        //       },
-        //   },
       },
 });
 
