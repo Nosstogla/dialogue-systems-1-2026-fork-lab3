@@ -27,7 +27,7 @@ interface GrammarEntry {
   day?: string;
   time?: string;
   allDay?: boolean;
-  //yesNo?: boolean;
+  confirm?: boolean;
 }
 
 const grammar: { [index: string]: GrammarEntry } = {
@@ -62,8 +62,8 @@ const grammar: { [index: string]: GrammarEntry } = {
   "22": { time: "22:00" },
   "23": { time: "23:00" },
 
-  yes: { allDay: true },
-  no: { allDay: false },
+  yes: { confirm: true },
+  no: { confirm: false },
 };
 
 function isInGrammar(utterance: string) 
@@ -86,15 +86,15 @@ function getTime(utterance: string)
   return (grammar[utterance.toLowerCase()] || {}).time;
 }
 
-function getAllDay(utterance: string): boolean | undefined 
-{
-  return (grammar[utterance.toLowerCase()] || {}).allDay;
-}
-
-// function getYesNo(utterance: string): boolean | undefined 
+// function getAllDay(utterance: string): boolean | undefined 
 // {
-//   return (grammar[utterance.toLowerCase()] || {}).yesNo;
+//   return (grammar[utterance.toLowerCase()] || {}).allDay;
 // }
+
+function getYesNo(utterance: string): boolean | undefined 
+{
+  return (grammar[utterance.toLowerCase()] || {}).confirm;
+}
 
 const dmMachine = setup
 (
@@ -158,6 +158,7 @@ const dmMachine = setup
 
         Greeting: 
           {
+            id: "Greeting",
             initial: "Prompt",
             on: 
               {
@@ -245,11 +246,14 @@ const dmMachine = setup
                   [
                     {
                       target: "Day",
-                      //target: "#Appointment",
-                      guard: ({ context }) => !!context.lastResult,
+                      guard: ({ context }) => !!context.person,
                     },
                     { 
-                      target: ".NoInput" 
+                      target: "#Appointment.CheckGrammar1",
+                      guard: ({ context }) => !!context.lastResult && !context.person,
+                    },
+                    { 
+                      target: ".NoInput",
                     },
                   ],
                 },
@@ -303,7 +307,7 @@ const dmMachine = setup
                     {
                       target: "WholeDay",
                       //target: "#Appointment",
-                      guard: ({ context }) => !!context.lastResult,
+                      guard: ({ context }) => !!context.day,
                     },
                     { 
                       target: ".NoInput" 
@@ -359,7 +363,7 @@ const dmMachine = setup
                   [
                     {
                       guard: ({ context }) => context.allDay === true,
-                      //target: "Create",
+                      target: "Create",
                     },
                     {
                       guard: ({ context }) => context.allDay === false,
@@ -398,7 +402,7 @@ const dmMachine = setup
                         {
                           actions: assign(({ event }) => 
                             {
-                              return { lastResult: event.value, allDay: event.value[0].utterance ? getAllDay(event.value[0].utterance) : undefined };
+                              return { lastResult: event.value, allDay: event.value[0].utterance ? getYesNo(event.value[0].utterance) : undefined };
                             }),
                         },
                       ASR_NOINPUT: 
@@ -418,8 +422,8 @@ const dmMachine = setup
                   LISTEN_COMPLETE: 
                   [
                     {
-                      //target: "Create",
-                      guard: ({ context }) => !!context.lastResult,
+                      target: "Create",
+                      guard: ({ context }) => !!context.time,
                     },
                     { 
                       target: ".NoInput" 
@@ -465,6 +469,111 @@ const dmMachine = setup
                 },
                 }
                 },
+                Create:
+                {
+                id: "Create",
+                initial: "Prompt",
+                on: 
+                {
+                  LISTEN_COMPLETE: 
+                  [
+                    {
+                      guard: ({ context }) => context.confirm === true,
+                      target: "Confirmation",
+                    },
+                    {
+                      guard: ({ context }) => context.confirm === false,
+                      target: "Who",
+                    },
+                    { 
+                      target: ".NoInput" 
+                    },
+                  ],
+                },
+                states:
+                {
+                Prompt: 
+                  {
+                    entry: { type: "spst.speak", 
+                      params: ({ context }) => 
+                      ({
+                        utterance: `Do you want me to create and appointment with ${context.person} on ${context.day} 
+                        ${context.allDay ? "for the whole day" : `at ${context.time}`}.
+                        . `,
+                      }),
+                    },
+                    on: { SPEAK_COMPLETE: "Ask" },
+                  },
+                  NoInput: 
+                  {
+                    entry: 
+                      {
+                        type: "spst.speak",
+                        params: { utterance: `I can't hear you!` },
+                      },
+                    on: 
+                      { SPEAK_COMPLETE: "Ask" },
+                  },
+
+                Ask: 
+                {
+                  entry: 
+                    { type: "spst.listen" },
+                  on: 
+                    {
+                      RECOGNISED:
+                        {
+                          actions: assign(({ event }) => 
+                            {
+                              return { lastResult: event.value, confirm: event.value[0].utterance ? getYesNo(event.value[0].utterance) : undefined };
+                            }),
+                        },
+                      ASR_NOINPUT: 
+                        {
+                          actions: assign({ lastResult: null }),
+                        },
+                    },
+                },
+                }
+                },
+                Confirmation:
+              {
+                id: "Confirmation",
+                entry: 
+                  {
+                    type: "spst.speak", 
+                    params: { utterance: `Your appointment has been created` },
+                  },
+
+                on: 
+                  { SPEAK_COMPLETE: "Done" },
+              },
+
+
+            Done: 
+              {
+                on: 
+                  { CLICK: "#Greeting", },
+              },
+            Hist: 
+            {
+            type: "history",
+            },
+            CheckGrammar1: 
+          {
+            entry: 
+              {
+                type: "spst.speak",
+                params: ({ context }) => 
+                  ({
+                    utterance: `You just said: ${context.lastResult![0].utterance}. And it 
+                    ${isInGrammar(context.lastResult![0].utterance) ? "is" : "is not"} in the grammar.`,
+                  }),
+              },
+
+            on: 
+              { SPEAK_COMPLETE: "Hist" },
+          },
                 
           },
         },

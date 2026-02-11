@@ -8,7 +8,7 @@ export interface DMContext {
   day?: string;
   time?: string;
   allDay?: boolean;
-  //yesNo?: boolean;
+  confirm?: boolean;
 }
 
 export type DMEvents = SpeechStateExternalEvent | { type: "CLICK" } | { type: "DONE" };
