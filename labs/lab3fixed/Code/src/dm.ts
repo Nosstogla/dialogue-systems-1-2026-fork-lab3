@@ -43,8 +43,6 @@ const grammar: { [index: string]: GrammarEntry } = {
   wednesday: { day: "Wednesday" },
   thursday: { day: "Thursday" },
   friday: { day: "Friday" },
-  // saturday: { day: "Saturday" },
-  // sunday: { day: "Sunday" },
   
   "7": { time: "07:00" },
   "8": { time: "08:00" },
@@ -56,19 +54,13 @@ const grammar: { [index: string]: GrammarEntry } = {
   "14": { time: "14:00" },
   "15": { time: "15:00" },
   "16": { time: "16:00" },
-  // "17": { time: "17:00" },
-  // "18": { time: "18:00" },
-  // "19": { time: "19:00" },
-  // "20": { time: "20:00" },
-  // "21": { time: "21:00" },
-  // "22": { time: "22:00" },
-  // "23": { time: "23:00" },
 
   yes: { confirm: true },
   jess: { confirm: true },
   "of course": { confirm: true },
   yeah: { confirm: true },
   absolutely: { confirm: true },
+
   no: { confirm: false },
   "no way": { confirm: false },
   "absolutely not": { confirm: false },
@@ -84,12 +76,6 @@ const times = Object.values(grammar).map(g => g.time).filter(Boolean) as string[
 const timesNumbers = times.map(t => parseInt(t.replace(":", ""),10)/100);
 const minTime = Math.min(...timesNumbers);
 const maxTime = Math.max(...timesNumbers);
-
-
-// function isInGrammar(utterance: string) 
-// {
-//   return utterance.toLowerCase() in grammar;
-// }
 
 function getPerson(utterance: string) 
 {
@@ -169,82 +155,73 @@ const dmMachine = setup
 
         WaitToStart: 
           {
-            on: { CLICK: "Greeting" },
-          },
-
-        Greeting: 
-          {
-            id: "Greeting",
-            initial: "Prompt",
             on: 
-              {
-                LISTEN_COMPLETE: 
-                [
-                  {
-                    target: "#Appointment",
-                    guard: ({ context }) => !!context.lastResult,
-                        actions: assign({
-                        person: undefined,
-                        day: undefined,
-                        time: undefined,
-                        allDay: undefined,
-                        confirm: undefined,
-                        //lastResult: null,
-                      }),
-                  },
-                  { 
-                    target: ".NoInput" 
-                  },
-                ],
-              },
-
-            states: 
-              {
-                Prompt: 
-                  {
-                    entry: { type: "spst.speak", params: { utterance: `Hello!` } },
-                    on: { SPEAK_COMPLETE: "Ask" },
-                  },
-
-                NoInput: 
-                  {
-                    entry: 
-                      {
-                        type: "spst.speak",
-                        params: { utterance: `I can't hear you!` },
-                      },
-                    on: 
-                      { SPEAK_COMPLETE: "Ask" },
-                  },
-
-                Ask: 
-                {
-                  entry: 
-                    { type: "spst.listen" },
-                  on: 
-                    {
-                      RECOGNISED:
-                        {
-                          actions: assign(({ event }) => 
-                            {
-                              return { lastResult: event.value };
-                            }),
-                        },
-                      ASR_NOINPUT: 
-                        {
-                          actions: assign({ lastResult: null }),
-                        },
-                    },
-                },
+              { 
+                CLICK: "Appointment", 
               },
           },
 
         Appointment: 
           {
             id: "Appointment",
-            initial: "Who",
+            initial: "Greeting",
             states: 
               {
+                Greeting: 
+                  {
+                    id: "Greeting",
+                    initial: "Prompt",
+                    on: 
+                      {
+                        LISTEN_COMPLETE: 
+                        [
+                          {
+                            target: "Who",
+                            guard: ({ context }) => !!context.lastResult,
+                            actions: assign
+                              ({
+                                person: undefined,
+                                day: undefined,
+                                time: undefined,
+                                allDay: undefined,
+                                confirm: undefined,
+                              }), 
+                          },
+                          { 
+                            target: "#NoInput" 
+                          },
+                        ],
+                      },
+
+                    states: 
+                      {
+                        Prompt: 
+                          {
+                            entry: { type: "spst.speak", params: { utterance: `Hello!` } },
+                            on: { SPEAK_COMPLETE: "Ask" },
+                          },
+
+                        Ask: 
+                        {
+                          entry: 
+                            { type: "spst.listen" },
+                          on: 
+                            {
+                              RECOGNISED:
+                                {
+                                  actions: assign(({ event }) => 
+                                    {
+                                      return { lastResult: event.value };
+                                    }),
+                                },
+                              ASR_NOINPUT: 
+                                {
+                                  actions: assign({ lastResult: null }),
+                                },
+                            },
+                        },
+                      },
+                  },
                 Who:
                 {
                 id: "Who",
@@ -482,113 +459,94 @@ const dmMachine = setup
                   ],
                 },
                 states:
-                {
-                Prompt: 
                   {
-                    entry: { type: "spst.speak", 
-                      params: ({ context }) => 
-                      ({
-                        utterance: `Do you want me to create and appointment with ${context.person} on ${context.day} ${context.allDay ? "for the whole day" : `at ${context.time}`}. `,
-                      }),
-                    },
-                    on: { SPEAK_COMPLETE: "Ask" },
-                  },
-                Ask: 
-                {
-                  entry: 
-                    { type: "spst.listen" },
-                  on: 
-                    {
-                      RECOGNISED:
-                        {
-                          actions: assign(({ event }) => 
-                            {
-                              return { lastResult: event.value, confirm: event.value[0].utterance ? getYesNo(event.value[0].utterance) : undefined };
-                            }),
+                    Prompt: 
+                      {
+                        entry: { type: "spst.speak", 
+                          params: ({ context }) => 
+                          ({
+                            utterance: `Do you want me to create an appointment with ${context.person} on ${context.day} ${context.allDay ? "for the whole day" : `at ${context.time}`}. `,
+                          }),
                         },
-                      ASR_NOINPUT: 
-                        {
-                          actions: assign({ lastResult: null }),
-                        },
-                    },
-                },
-                }
+                        on: { SPEAK_COMPLETE: "Ask" },
+                      },
+                    Ask: 
+                      {
+                        entry: 
+                          { type: "spst.listen" },
+                        on: 
+                          {
+                            RECOGNISED:
+                              {
+                                actions: assign(({ event }) => 
+                                  {
+                                    return { lastResult: event.value, confirm: event.value[0].utterance ? getYesNo(event.value[0].utterance) : undefined };
+                                  }),
+                              },
+                            ASR_NOINPUT: 
+                              {
+                                actions: assign({ lastResult: null }),
+                              },
+                          },
+                      },
+                  }
                 },
                 Confirmation:
-              {
-                id: "Confirmation",
-                entry: 
                   {
-                    type: "spst.speak", 
-                    params: { utterance: `Your appointment has been created` },
-                  },
-
-                on: 
-                  { SPEAK_COMPLETE: "Done" },
-              },
-
-
-            Done: 
-              {
-                on: 
-                  { CLICK: "#Greeting", },
-              },
-            Hist: 
-            {
-            type: "history",
-            history: "shallow",
-            },
-            
-          
-              
-          },
-
-
-        },
-
-                  NoInput: 
-                  {
-                    id: "NoInput",
+                    id: "Confirmation",
                     entry: 
                       {
-                        type: "spst.speak",
-                        params: { utterance: `I can't hear you!` },
+                        type: "spst.speak", 
+                        params: { utterance: `Your appointment has been created` },
                       },
-                    on: 
-                      { SPEAK_COMPLETE: "#Appointment.Hist" },
-                  },
-              Errorhandling: 
-              {
-                id: "Errorhandling",
 
-                              entry: 
+                    on: 
+                      { SPEAK_COMPLETE: "Done" },
+                  },
+
+                Done: 
+                  {
+                    on: 
+                      { CLICK: "#Greeting", },
+                  },
+
+                Hist: 
+                {
+                type: "history",
+                history: "shallow",
+                },
+               
+              },
+          },
+
+        NoInput: 
+          {
+            id: "NoInput",
+            entry: 
+              {
+                type: "spst.speak",
+                params: { utterance: `I can't hear you!` },
+              },
+            on: 
+              { SPEAK_COMPLETE: "#Appointment.Hist" },
+          },
+
+        Errorhandling: 
+          {
+            id: "Errorhandling",
+            entry: 
               {
                 type: "spst.speak",
                 params: ({ context }: {context: DMContext}) => 
-                  ({
-                        utterance: `You just said: ${context.lastResult![0].utterance}. And it is not an option.`,
-                  }),
+                  ({ utterance: `You just said: ${context.lastResult![0].utterance}. And it is not an option.`,}),
               },
-
-                on: 
-                  { 
-                    SPEAK_COMPLETE: {
-                    target: "#Appointment.Hist",
-                      //actions: assign({lastResult: null}),
-                     },
-                    }
-                  },
-  
-
-        Done: 
-          {
             on: 
-              { CLICK: "Greeting", },
+              { 
+                SPEAK_COMPLETE: {target: "#Appointment.Hist",},
+              }
           },
       },
 });
-
-
 
 
 const dmActor = createActor(dmMachine, {inspect: inspector.inspect,}).start();
