@@ -26,6 +26,8 @@ In this case "confidence" means how sure our speechstate is of your utterance. S
 
 Let's say, you said "Dumbledore" while your dialogue machine was listening, if you see {confidence: 0.75, utterance: "Dumbledore" } this means your machine is 75% sure that what you said can be transcribed with the string "Dumbledore".
 
+(Next step should be done when you test your project in the browser after running `npm run dev` and opening the project in your browser with `O + Enter`)
+
 Note: Explore the data structure of our `context`: `State context`. An easy way to check that is to tinker with your browser's `developer console`. You may be familiar with the console given that you needed to use it for debugging your Lab 3 project. If you are not, there are some key combinations you can try to open the `developer console` on your OS (Operating System) and your browser type for your reference below:
 
 Try F12 (or Fn + F12 if you prefer to use your function buttons that way). Or:
