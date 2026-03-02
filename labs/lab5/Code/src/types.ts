@@ -33,5 +33,4 @@ export interface NLUObject { // This is the type of the interpretation in the DM
 }
 
 
-
 export type DMEvents = SpeechStateExternalEvent | { type: "CLICK" } | { type: "DONE" };

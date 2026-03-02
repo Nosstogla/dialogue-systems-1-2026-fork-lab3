@@ -2,102 +2,65 @@ import { assign, createActor, setup } from "xstate";
 import type { Settings } from "speechstate";
 import { speechstate } from "speechstate";
 import { createBrowserInspector } from "@statelyai/inspect";
-import { KEY } from "./azure";
-import type { DMContext, DMEvents } from "./types";
+import { KEY, NLU_KEY } from "./azure";
+import type { DMContext, DMEvents, NLUObject } from "./types";
 
 const inspector = createBrowserInspector();
 
+
+  const azureLanguageCredentials = {
+    endpoint: "https://lang-99.cognitiveservices.azure.com/language/:analyze-conversations?api-version=2024-11-15-preview" /** your Azure CLU prediction URL */,
+    key: NLU_KEY /** reference to your Azure CLU key */,
+    deploymentName: "appointment" /** your Azure CLU deployment */,
+    projectName: "appointment" /** your Azure CLU project name */,
+  };
+
 const azureCredentials = {
   endpoint:
-    "https://norwayeast.api.cognitive.microsoft.com/sts/v1.0/issuetoken",
+    "https://switzerlandnorth.api.cognitive.microsoft.com/sts/v1.0/issuetoken",
   key: KEY,
 };
 
 const settings: Settings = {
+  azureLanguageCredentials: azureLanguageCredentials, /** global activation of NLU */
   azureCredentials: azureCredentials,
-  azureRegion: "norwayeast",
+  azureRegion: "switzerlandnorth",
   asrDefaultCompleteTimeout: 0,
   asrDefaultNoInputTimeout: 5000,
   locale: "en-US",
   ttsDefaultVoice: "en-US-DavisNeural",
 };
 
-interface GrammarEntry {
-  person?: string;
-  day?: string;
-  time?: string;
-  allDay?: boolean;
-  confirm?: boolean;
-  
-}
 
-const grammar: { [index: string]: GrammarEntry } = {
-  vlad: { person: "Vladislav Maraev" },
-  bora: { person: "Bora Kara" },
-  tal: { person: "Talha Bedir" },
-  tom: { person: "Tom Södahl Bladsjö" },
-  will: { person: "Will Wilson" },
-  anna: { person: "Anna Andersson" },
-  
-  monday: { day: "Monday" },
-  tuesday: { day: "Tuesday" },
-  wednesday: { day: "Wednesday" },
-  thursday: { day: "Thursday" },
-  friday: { day: "Friday" },
-  
-  "7": { time: "07:00" },
-  "8": { time: "08:00" },
-  "9": { time: "09:00" },
-  "10": { time: "10:00" },
-  "11": { time: "11:00" },
-  "12": { time: "12:00" },
-  "13": { time: "13:00" },
-  "14": { time: "14:00" },
-  "15": { time: "15:00" },
-  "16": { time: "16:00" },
-
-  yes: { confirm: true },
-  jess: { confirm: true },
-  "of course": { confirm: true },
-  yeah: { confirm: true },
-  absolutely: { confirm: true },
-
-  no: { confirm: false },
-  "no way": { confirm: false },
-  "absolutely not": { confirm: false },
-};
-
-const people = Object.values(grammar).map(g => g.person).filter(Boolean) as string[];
-const peopleString = people.join(", ");
-
-const days = Object.values(grammar).map(g => g.day).filter(Boolean) as string[];
-const daysString = days.join(", ");
-
-const times = Object.values(grammar).map(g => g.time).filter(Boolean) as string[];
-const timesNumbers = times.map(t => parseInt(t.replace(":", ""),10)/100);
-const minTime = Math.min(...timesNumbers);
-const maxTime = Math.max(...timesNumbers);
-
-function getPerson(utterance: string) 
+function getPerson(nluValue: NLUObject) 
 {
-  return (grammar[utterance.toLowerCase()] || {}).person;
+  return nluValue.entities.find(e => e.category === "meeting_person")?.text;
 }
 
-function getDay(utterance: string) 
+function getTime(nluValue: NLUObject) 
 {
-  return (grammar[utterance.toLowerCase()] || {}).day;
+  return nluValue.entities.find(e => e.category === "meeting_time")?.text;
 }
 
-function getTime(utterance: string) 
+function getDay(nluValue: NLUObject) 
 {
-  return (grammar[utterance.toLowerCase()] || {}).time;
+  return nluValue.entities.find(e => e.category === "meeting_day")?.text;
 }
 
-
-function getYesNo(utterance: string): boolean | undefined 
+function getYesNo(nluValue: NLUObject) : boolean | undefined 
 {
-  return (grammar[utterance.toLowerCase()] || {}).confirm;
+  if(nluValue.entities.some(e => e.category === "yes") && nluValue.entities.some(e => e.category === "no")) 
+    {return undefined;} 
+
+  if(nluValue.entities.some(e => e.category === "yes")) 
+    {return true;}
+
+  if(nluValue.entities.some(e => e.category === "no")) 
+    {return false;}
+
+  return undefined;
 }
+
 
 const dmMachine = setup
 (
@@ -125,6 +88,7 @@ const dmMachine = setup
           (
             {
               type: "LISTEN",
+              value: { nlu: true } /** Local activation of NLU */,
             }
           ),
       },
@@ -132,6 +96,7 @@ const dmMachine = setup
 )
 
 .createMachine({
+  
   context: ({ spawn }) => 
     (
       {
@@ -159,38 +124,39 @@ const dmMachine = setup
           {
             on: 
               { 
-                CLICK: "Appointment", 
+                CLICK: "Greeting", 
               },
           },
-
-        Appointment: 
-          {
-            id: "Appointment",
-            initial: "Greeting",
-            states: 
-              {
                 Greeting: 
                   {
                     id: "Greeting",
                     initial: "Prompt",
+                      entry: assign({
+                        person: undefined,
+                        day: undefined,
+                        time: undefined,
+                        allDay: undefined,
+                        confirm: undefined,
+                        lastResult: null,
+                        interpretation: null,
+                      }),
                     on: 
                       {
                         LISTEN_COMPLETE: 
                         [
                           {
-                            target: "Who",
-                            guard: ({ context }) => !!context.lastResult,
-                            actions: assign
-                              ({
-                                person: undefined,
-                                day: undefined,
-                                time: undefined,
-                                allDay: undefined,
-                                confirm: undefined,
-                              }), 
+                            target: "Appointment",
+                            guard: ({ context }) => context.interpretation?.topIntent === "create_meeting",
+
+                          },
+                                                    {
+                            target: "WhoIs",
+                            guard: ({ context }) => context.interpretation?.topIntent === "who_is_x",
                           },
                           { 
-                            target: "#NoInput" 
+                            target: "#NoInput",
+                            guard: ({ context }) =>
+                              !context.lastResult || !context.interpretation, 
                           },
                         ],
                       },
@@ -211,9 +177,16 @@ const dmMachine = setup
                             {
                               RECOGNISED:
                                 {
-                                  actions: assign(({ event }) => 
+                                  actions: assign(({ event, context }) => 
                                     {
-                                      return { lastResult: event.value };
+
+                                      return { lastResult: event.value, 
+                                        interpretation: event.nluValue, 
+                                        person: getPerson(event.nluValue), 
+                                        day: getDay(event.nluValue), 
+                                        time: getTime(event.nluValue), 
+                                      allDay: context.time ?? getTime(event.nluValue) ? false : context.allDay,};
+                                      
                                     }),
                                 },
                               ASR_NOINPUT: 
@@ -224,6 +197,61 @@ const dmMachine = setup
                         },
                       },
                   },
+                  WhoIs: { 
+                  id: "WhoIs",
+                  initial: "Prompt",
+                  states: {
+                    Prompt: 
+                      {
+                        entry: { type: "spst.speak", 
+                          params: ({ context }: { context: DMContext }) => 
+                          ({
+                            utterance: `${context.person} is a well known famous person `,
+                          }),
+                        },
+                       on: 
+                      { CLICK: "#Greeting", },
+                      },
+                  },
+                  },
+                  
+        Appointment: 
+          {
+            id: "Appointment",
+            initial: "Route",
+            states: 
+              {
+                Route: {
+                  always: [
+                    {
+                        target: "Who",
+                        guard: ({ context }) => !context.person,
+                      },
+
+                      
+                      {
+                        target: "Day",
+                        guard: ({ context }) => !context.day,
+                      },
+
+                      
+                      {
+                        target: "WholeDay",
+                        guard: ({ context }) => context.allDay === undefined,
+                      },
+
+                      {
+                        target: "Time",
+                        guard: ({ context }) => context.allDay === false && !context.time,
+                      },
+
+                      {
+                        target: "Create",
+                        guard: ({ context }) => !!context.person && !!context.day && context.allDay !== undefined,
+                      },
+                  ],
+                  },
+
                 Who:
                 {
                 id: "Who",
@@ -233,15 +261,16 @@ const dmMachine = setup
                   LISTEN_COMPLETE: 
                   [
                     {
-                      target: "Day",
-                      guard: ({ context }) => !!context.person,
+                      target: "Route",
+                      guard: ({ context }) => !!context.lastResult && !!context.person,
                     },
                     { 
                       target: "#Errorhandling",
-                      guard: ({ context }) => !!context.lastResult && !context.person,
+                      guard: ({ context }) => !!context.lastResult && context.person === undefined,
                     },
                     { 
                       target: "#NoInput",
+                      guard: ({ context }) => !context.lastResult, 
                     },
                   ],
                 },
@@ -249,7 +278,7 @@ const dmMachine = setup
                 {
                 Prompt: 
                   {
-                    entry: { type: "spst.speak", params: { utterance: `Who are you meeting with? Available options are ${peopleString}` } },
+                    entry: { type: "spst.speak", params: { utterance: `Who are you meeting with?` } },
                     on: { SPEAK_COMPLETE: "Ask" },
                   },
 
@@ -261,9 +290,19 @@ const dmMachine = setup
                     {
                       RECOGNISED:
                         {
-                          actions: assign(({ event }) => 
+                          actions: assign(({ event, context }) => 
                             {
-                              return { lastResult: event.value, person: event.value[0].utterance ? getPerson(event.value[0].utterance) : undefined };
+
+
+                              return { 
+                                
+                                lastResult: event.value, 
+                                interpretation: event.nluValue,
+                                person: context.person ?? getPerson(event.nluValue),
+                                day: context.day ?? getDay(event.nluValue),
+                                time: context.time ?? getTime(event.nluValue),
+                                allDay: context.time ?? getTime(event.nluValue) ? false : context.allDay,
+                                };
                             }),
                         },
                       ASR_NOINPUT: 
@@ -283,15 +322,16 @@ const dmMachine = setup
                   LISTEN_COMPLETE: 
                   [
                     {
-                      target: "WholeDay",
-                      guard: ({ context }) => !!context.day,
+                      target: "Route",
+                      guard: ({ context }) => !!context.lastResult && !!context.day,
                     },
-                    { 
+                                        { 
                       target: "#Errorhandling",
-                      guard: ({ context }) => !!context.lastResult && !context.day,
+                      guard: ({ context }) => !!context.lastResult && context.day === undefined,
                     },
                     { 
                       target: "#NoInput",
+                      guard: ({ context }) => !context.lastResult, 
                     },
                   ],
                 },
@@ -299,7 +339,7 @@ const dmMachine = setup
                 {
                 Prompt: 
                   {
-                    entry: { type: "spst.speak", params: { utterance: `On which day is your meeting? Available options are ${daysString}` } },
+                    entry: { type: "spst.speak", params: { utterance: `On which day is your meeting?` } },
                     on: { SPEAK_COMPLETE: "Ask" },
                   },
 
@@ -311,9 +351,15 @@ const dmMachine = setup
                     {
                       RECOGNISED:
                         {
-                          actions: assign(({ event }) => 
+                          actions: assign(({ event, context }) => 
                             {
-                              return { lastResult: event.value, day: event.value[0].utterance ? getDay(event.value[0].utterance) : undefined };
+                              return { lastResult: event.value, 
+                                interpretation: event.nluValue,
+                                person: context.person ?? getPerson(event.nluValue),
+                                day: context.day ?? getDay(event.nluValue),
+                                time: context.time ?? getTime(event.nluValue), 
+                                allDay: context.time ?? getTime(event.nluValue) ? false : context.allDay,
+                               };
                             }),
                         },
                       ASR_NOINPUT: 
@@ -333,20 +379,18 @@ const dmMachine = setup
                   LISTEN_COMPLETE: 
                   [
                     {
-                      guard: ({ context }) => context.allDay === true,
-                      target: "Create",
+                      target: "Route",
+                      guard: ({ context }) => !!context.lastResult && context.allDay !== undefined,
                     },
-                    {
-                      guard: ({ context }) => context.allDay === false,
-                      target: "Time",
-                    },
-                    { 
+                                        { 
                       target: "#Errorhandling",
-                      guard: ({ context }) => !!context.lastResult && !context.allDay,
+                      guard: ({ context }) => !!context.lastResult && context.allDay === undefined,
                     },
                     { 
                       target: "#NoInput",
+                      guard: ({ context }) => !context.lastResult, 
                     },
+
                   ],
                 },
                 states:
@@ -365,9 +409,16 @@ const dmMachine = setup
                     {
                       RECOGNISED:
                         {
-                          actions: assign(({ event }) => 
+                          actions: assign(({ event, context }) => 
                             {
-                              return { lastResult: event.value, allDay: event.value[0].utterance ? getYesNo(event.value[0].utterance) : undefined };
+                              return { 
+                                lastResult: event.value, 
+                                interpretation: event.nluValue,
+                                allDay: context.allDay ?? getYesNo(event.nluValue),
+                                person: context.person ?? getPerson(event.nluValue),
+                                day: context.day ?? getDay(event.nluValue),
+                                time: context.time ?? getTime(event.nluValue), 
+                               };
                             }),
                         },
                       ASR_NOINPUT: 
@@ -387,15 +438,16 @@ const dmMachine = setup
                   LISTEN_COMPLETE: 
                   [
                     {
-                      guard: ({ context }) => !!context.time,
-                      target: "Create",
+                      target: "Route",
+                      guard: ({ context }) => !!context.lastResult && !!context.time,
                     },
-                    { 
+                                        { 
                       target: "#Errorhandling",
-                      guard: ({ context }) => !!context.lastResult && !context.time,
+                      guard: ({ context }) => !!context.lastResult && context.time === undefined,
                     },
                     { 
                       target: "#NoInput",
+                      guard: ({ context }) => !context.lastResult, 
                     },
                   ],
                 },
@@ -403,7 +455,7 @@ const dmMachine = setup
                 {
                 Prompt: 
                   {
-                    entry: { type: "spst.speak", params: { utterance: `What time is your meeting? You can book between ${minTime} and ${maxTime}` } },
+                    entry: { type: "spst.speak", params: { utterance: `What time is your meeting?` } },
                     on: { SPEAK_COMPLETE: "Ask" },
                   },
                 Ask: 
@@ -414,9 +466,15 @@ const dmMachine = setup
                     {
                       RECOGNISED:
                         {
-                          actions: assign(({ event }) => 
+                          actions: assign(({ event, context }) => 
                             {
-                              return { lastResult: event.value, time: event.value[0].utterance ? getTime(event.value[0].utterance) : undefined };
+                              return { lastResult: event.value, 
+                                interpretation: event.nluValue,
+                                person: context.person ?? getPerson(event.nluValue),
+                                day: context.day ?? getDay(event.nluValue),
+                                time: context.time ?? getTime(event.nluValue),
+                                allDay: context.time ?? getTime(event.nluValue) ? false : context.allDay,
+                              };
                             }),
                         },
                       ASR_NOINPUT: 
@@ -453,7 +511,7 @@ const dmMachine = setup
                     },
                     { 
                       target: "#Errorhandling",
-                      guard: ({ context }) => !!context.lastResult && !context.confirm,
+                      guard: ({ context }) => !!context.lastResult && context.confirm === undefined,
                     },
                     { 
                       target: "#NoInput",
@@ -480,9 +538,11 @@ const dmMachine = setup
                           {
                             RECOGNISED:
                               {
-                                actions: assign(({ event }) => 
+                                actions: assign(({ event, context }) => 
                                   {
-                                    return { lastResult: event.value, confirm: event.value[0].utterance ? getYesNo(event.value[0].utterance) : undefined };
+                                    return { lastResult: event.value, 
+                                      interpretation: event.nluValue,
+                                      confirm: context.confirm ?? getYesNo(event.nluValue) };
                                   }),
                               },
                             ASR_NOINPUT: 
@@ -557,8 +617,11 @@ dmActor.subscribe((state) => {
   console.group("State update");
   console.log("State value:", state.value);
   console.log("State context:", state.context);
+  console.log("State context interpretation:", state.context.interpretation);
+  console.log("State context interpretation entities:", state.context.interpretation?.entities);
   console.groupEnd();
 });
+
 
 export function setupButton(element: HTMLButtonElement) 
 {
